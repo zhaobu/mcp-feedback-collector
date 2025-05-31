@@ -2,15 +2,15 @@
 
 一个现代化的 Model Context Protocol (MCP) 服务器，为AI助手提供交互式用户反馈收集功能。
 
-![Version](https://img.shields.io/badge/version-2.0.0-blue)
-![Python](https://img.shields.io/badge/python-3.8+-green)
+![Version](https://img.shields.io/badge/version-2.0.1-blue)
+![Python](https://img.shields.io/badge/python-3.10+-green)
 ![License](https://img.shields.io/badge/license-MIT-orange)
 
 ## 在cursor规则中可以下面这样配置
 
-“Whenever you want to ask a question, always call the MCP .
+"Whenever you want to ask a question, always call the MCP .
 
-Whenever you’re about to complete a user request, call the MCP instead of simply ending the process. Keep calling MCP until the user’s feedback is empty, then end the request. mcp-feedback-collector.collect_feedback ”
+Whenever you're about to complete a user request, call the MCP instead of simply ending the process. Keep calling MCP until the user's feedback is empty, then end the request. mcp-feedback-collector.collect_feedback "
 
 ## 相关教程链接
 油管：https://youtu.be/aYtGm1xHNXI
@@ -18,7 +18,8 @@ B站：https://www.bilibili.com/video/BV1J6jyzQE8P/
 
 ## ✨ 主要特性
 
-- 🎨 **现代化界面** - 美观的700x800像素GUI，支持中文界面
+- 🎨 **现代化界面** - 美观的700x800像素GUI，支持中文界面，**窗口居中显示并自动置顶**
+- ⌨️ **增强键盘交互** - 支持 **Enter 提交、Esc 取消、Ctrl+V 直接粘贴图片**
 - 📷 **多图片支持** - 同时选择多张图片，支持文件选择和剪贴板粘贴
 - 💬 **灵活反馈** - 支持纯文字、纯图片或文字+图片组合反馈
 - ⚡ **零配置安装** - 使用uvx一键安装，无需复杂配置

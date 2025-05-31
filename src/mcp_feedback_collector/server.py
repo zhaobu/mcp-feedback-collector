@@ -13,6 +13,7 @@ import queue
 from pathlib import Path
 from datetime import datetime
 import os
+import time # Import the time module
 
 from mcp.server.fastmcp import FastMCP
 from mcp.server.fastmcp.utilities.types import Image as MCPImage
@@ -52,9 +53,33 @@ class FeedbackDialog:
             except:
                 pass
             
-            # 居中显示窗口
-            self.root.eval('tk::PlaceWindow . center')
+            # --- 确保窗口显示和居中 --- #
+            # 手动计算并设置窗口位置
+            self.root.update_idletasks() # 更新窗口信息
+            window_width = self.root.winfo_width()
+            window_height = self.root.winfo_height()
+            screen_width = self.root.winfo_screenwidth()
+            screen_height = self.root.winfo_screenheight()
+
+            x = (screen_width // 2) - (window_width // 2)
+            y = (screen_height // 2) - (window_height // 2)
+
+            self.root.geometry(f'{window_width}x{window_height}+{x}+{y}')
             
+            # 确保窗口显示在前
+            self.root.deiconify() # 如果窗口被最小化，恢复它
+            self.root.lift()      # 将窗口带到顶部
+            # self.root.attributes('-topmost', True) # 可选：使其置顶
+            # self.root.after(500, lambda: self.root.attributes('-topmost', False)) # 可选：短暂置顶后取消 (500ms)
+            
+            # 绑定键盘快捷键
+            self.root.bind('<Return>', lambda event=None: self.submit_feedback()) # Enter键绑定提交
+            self.root.bind('<Escape>', lambda event=None: self.cancel())   # Esc键绑定取消
+
+            # 绑定粘贴快捷键 (Ctrl+V)
+            self.root.bind('<Control-v>', lambda event=None: self.paste_from_clipboard()) # Ctrl+v 绑定粘贴
+            self.root.bind('<Control-V>', lambda event=None: self.paste_from_clipboard()) # Ctrl+V 绑定粘贴
+
             # 创建界面
             self.create_widgets()
             
@@ -232,7 +257,7 @@ class FeedbackDialog:
         # 主要操作按钮
         submit_btn = tk.Button(
             button_frame,
-            text="✅ 提交反馈",
+            text="✅ 提交反馈 (Enter)",
             command=self.submit_feedback,
             font=("Microsoft YaHei", 12, "bold"),
             bg="#27ae60",
@@ -247,7 +272,7 @@ class FeedbackDialog:
         
         cancel_btn = tk.Button(
             button_frame,
-            text="❌ 取消",
+            text="❌ 取消 (Esc)",
             command=self.cancel,
             font=("Microsoft YaHei", 12),
             bg="#95a5a6",
@@ -260,15 +285,15 @@ class FeedbackDialog:
         )
         cancel_btn.pack(side=tk.LEFT)
         
-        # 说明文字
-        info_label = tk.Label(
+        # 原始的提示文字 (保留原始的多图片提示)
+        info_label_original = tk.Label(
             main_frame,
             text="💡 提示：您可以只提供文字反馈、只提供图片，或者两者都提供（支持多张图片）",
             font=("Microsoft YaHei", 9),
             fg="#7f8c8d",
             bg="#f5f5f5"
         )
-        info_label.pack(pady=(15, 0))
+        info_label_original.pack(pady=(15, 0))
         
     def clear_placeholder(self, event):
         """清除占位符文本"""
