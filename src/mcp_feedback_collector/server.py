@@ -73,7 +73,8 @@ class FeedbackDialog:
             # self.root.after(500, lambda: self.root.attributes('-topmost', False)) # 可选：短暂置顶后取消 (500ms)
             
             # 绑定键盘快捷键
-            self.root.bind('<Return>', lambda event=None: self.submit_feedback()) # Enter键绑定提交
+            # self.root.bind('<Return>', lambda event=None: self.submit_feedback()) # Enter键绑定提交
+            self.root.bind('<Control-Return>', lambda event=None: self.submit_feedback()) # Ctrl+Enter键绑定提交
             self.root.bind('<Escape>', lambda event=None: self.cancel())   # Esc键绑定取消
 
             # 绑定粘贴快捷键 (Ctrl+V)
@@ -257,7 +258,7 @@ class FeedbackDialog:
         # 主要操作按钮
         submit_btn = tk.Button(
             button_frame,
-            text="✅ 提交反馈 (Enter)",
+            text="✅ 提交反馈 (Ctrl+Enter)",
             command=self.submit_feedback,
             font=("Microsoft YaHei", 12, "bold"),
             bg="#27ae60",
@@ -334,27 +335,49 @@ class FeedbackDialog:
         self.update_image_preview()
                 
     def paste_from_clipboard(self):
-        """从剪贴板粘贴图片"""
+        """从剪贴板粘贴图片或文本"""
         try:
+            # 尝试从剪贴板获取文本
+            text_content = self.root.clipboard_get()
+            if text_content:
+                # 如果获取到文本，插入到文本区域
+                # 移除占位符，然后插入文本
+                if self.text_widget.get(1.0, tk.END).strip() == "请在此输入您的反馈、建议或问题...":
+                    self.text_widget.delete(1.0, tk.END)
+                self.text_widget.insert(tk.INSERT, text_content)
+                # messagebox.showinfo("提示", "已从剪贴板粘贴文本") # 可选提示
+                return # 粘贴了文本就结束
+
+        except tk.TclError: # 如果剪贴板不是文本，可能会抛出TclError
+            # 剪贴板不是文本，尝试获取图片
+            pass # 继续执行下面的图片粘贴逻辑
+        except Exception as e: # 捕获其他文本获取错误
+             print(f"从剪贴板获取文本失败: {e}")
+             # messagebox.showerror("错误", f"无法从剪贴板获取文本: {str(e)}") # 可选错误提示
+
+        try:
+            # 尝试从剪贴板获取图片 (原有的图片粘贴逻辑)
             from PIL import ImageGrab
             img = ImageGrab.grabclipboard()
-            
+
             if img:
                 buffer = io.BytesIO()
                 img.save(buffer, format='PNG')
                 image_data = buffer.getvalue()
-                
+
                 self.selected_images.append({
                     'data': image_data,
                     'source': '剪贴板',
                     'size': img.size,
                     'image': img
                 })
-                
+
                 self.update_image_preview()
+                # messagebox.showinfo("提示", "已从剪贴板粘贴图片") # 可选提示
             else:
-                messagebox.showwarning("警告", "剪贴板中没有图片数据")
-                
+                # 如果既没有文本也没有图片，则提示
+                messagebox.showwarning("警告", "剪贴板中没有可粘贴的文本或图片数据")
+
         except Exception as e:
             messagebox.showerror("错误", f"无法从剪贴板获取图片: {str(e)}")
             
