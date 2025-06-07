@@ -26,7 +26,16 @@ mcp = FastMCP(
 
 # 配置超时时间（秒）
 DEFAULT_DIALOG_TIMEOUT = 300  # 5分钟
-DIALOG_TIMEOUT = int(os.getenv("MCP_DIALOG_TIMEOUT", DEFAULT_DIALOG_TIMEOUT))
+try:
+    DIALOG_TIMEOUT = int(os.getenv("MCP_DIALOG_TIMEOUT", DEFAULT_DIALOG_TIMEOUT))
+    # 支持更长的超时时间，最大支持24小时
+    if DIALOG_TIMEOUT > 86400:  # 24小时
+        print(f"警告：超时时间过长 ({DIALOG_TIMEOUT}秒)，已限制为24小时")
+        DIALOG_TIMEOUT = 86400
+    print(f"MCP反馈收集器超时时间设置为: {DIALOG_TIMEOUT}秒 ({DIALOG_TIMEOUT//60}分钟)")
+except ValueError as e:
+    print(f"警告：无法解析MCP_DIALOG_TIMEOUT环境变量，使用默认值 {DEFAULT_DIALOG_TIMEOUT}秒: {e}")
+    DIALOG_TIMEOUT = DEFAULT_DIALOG_TIMEOUT
 
 class FeedbackDialog:
     def __init__(self, work_summary: str = "", timeout_seconds: int = DIALOG_TIMEOUT):
@@ -76,10 +85,8 @@ class FeedbackDialog:
             # self.root.bind('<Return>', lambda event=None: self.submit_feedback()) # Enter键绑定提交
             self.root.bind('<Control-Return>', lambda event=None: self.submit_feedback()) # Ctrl+Enter键绑定提交
             self.root.bind('<Escape>', lambda event=None: self.cancel())   # Esc键绑定取消
-
-            # 绑定粘贴快捷键 (Ctrl+V)
-            self.root.bind('<Control-v>', lambda event=None: self.paste_from_clipboard()) # Ctrl+v 绑定粘贴
-            self.root.bind('<Control-V>', lambda event=None: self.paste_from_clipboard()) # Ctrl+V 绑定粘贴
+            self.root.bind('<Control-v>', self.paste_handler)  # Ctrl+v 绑定智能粘贴
+            self.root.bind('<Control-V>', self.paste_handler)  # Ctrl+V 绑定智能粘贴
 
             # 创建界面
             self.create_widgets()
@@ -167,9 +174,12 @@ class FeedbackDialog:
             fg="#2c3e50",
             relief=tk.FLAT,
             bd=5,
-            insertbackground="#3498db"
+            insertbackground="#3498db",
+            undo=True
         )
         self.text_widget.pack(fill=tk.BOTH, expand=True, padx=15, pady=15)
+        
+        # 保持Text控件的默认粘贴行为，用于文本粘贴
         self.text_widget.insert(tk.END, "请在此输入您的反馈、建议或问题...")
         self.text_widget.bind("<FocusIn>", self.clear_placeholder)
         
@@ -210,7 +220,7 @@ class FeedbackDialog:
         
         tk.Button(
             btn_frame,
-            text="📋 从剪贴板粘贴",
+            text="📋 粘贴图片",
             command=self.paste_from_clipboard,
             bg="#2ecc71",
             fg="white",
@@ -286,15 +296,15 @@ class FeedbackDialog:
         )
         cancel_btn.pack(side=tk.LEFT)
         
-        # 原始的提示文字 (保留原始的多图片提示)
-        info_label_original = tk.Label(
+        # 提示信息
+        info_label = tk.Label(
             main_frame,
-            text="💡 提示：您可以只提供文字反馈、只提供图片，或者两者都提供（支持多张图片）",
+            text="💡 提示：文本粘贴请在文本框中使用 Ctrl+V，图片粘贴请使用上方按钮（支持多张图片）",
             font=("Microsoft YaHei", 9),
             fg="#7f8c8d",
             bg="#f5f5f5"
         )
-        info_label_original.pack(pady=(15, 0))
+        info_label.pack(pady=(15, 0))
         
     def clear_placeholder(self, event):
         """清除占位符文本"""
@@ -334,33 +344,14 @@ class FeedbackDialog:
                 
         self.update_image_preview()
                 
-    def paste_from_clipboard(self):
-        """从剪贴板粘贴图片或文本"""
+    def paste_handler(self, event=None):
+        """智能粘贴处理：优先粘贴图片，否则粘贴文本，并阻止默认行为"""
         try:
-            # 尝试从剪贴板获取文本
-            text_content = self.root.clipboard_get()
-            if text_content:
-                # 如果获取到文本，插入到文本区域
-                # 移除占位符，然后插入文本
-                if self.text_widget.get(1.0, tk.END).strip() == "请在此输入您的反馈、建议或问题...":
-                    self.text_widget.delete(1.0, tk.END)
-                self.text_widget.insert(tk.INSERT, text_content)
-                # messagebox.showinfo("提示", "已从剪贴板粘贴文本") # 可选提示
-                return # 粘贴了文本就结束
-
-        except tk.TclError: # 如果剪贴板不是文本，可能会抛出TclError
-            # 剪贴板不是文本，尝试获取图片
-            pass # 继续执行下面的图片粘贴逻辑
-        except Exception as e: # 捕获其他文本获取错误
-             print(f"从剪贴板获取文本失败: {e}")
-             # messagebox.showerror("错误", f"无法从剪贴板获取文本: {str(e)}") # 可选错误提示
-
-        try:
-            # 尝试从剪贴板获取图片 (原有的图片粘贴逻辑)
             from PIL import ImageGrab
             img = ImageGrab.grabclipboard()
 
             if img:
+                # 尝试粘贴图片
                 buffer = io.BytesIO()
                 img.save(buffer, format='PNG')
                 image_data = buffer.getvalue()
@@ -371,16 +362,58 @@ class FeedbackDialog:
                     'size': img.size,
                     'image': img
                 })
-
                 self.update_image_preview()
-                # messagebox.showinfo("提示", "已从剪贴板粘贴图片") # 可选提示
+                return "break"  # 阻止Tkinter默认的粘贴行为
             else:
-                # 如果既没有文本也没有图片，则提示
-                messagebox.showwarning("警告", "剪贴板中没有可粘贴的文本或图片数据")
+                # 尝试粘贴文本
+                text_content = self.root.clipboard_get()
+                if text_content:
+                    if self.text_widget.get(1.0, tk.END).strip() == "请在此输入您的反馈、建议或问题...":
+                        self.text_widget.delete(1.0, tk.END)
+                    self.text_widget.insert(tk.INSERT, text_content)
+                    return "break"  # 阻止Tkinter默认的粘贴行为
+        except Exception:
+            # 捕获异常（如剪贴板内容无法识别），不做任何操作
+            pass
+        return None # 让Tkinter处理其他未被处理的粘贴事件
 
-        except Exception as e:
-            messagebox.showerror("错误", f"无法从剪贴板获取图片: {str(e)}")
-            
+    def select_image_file(self):
+        """选择图片文件（支持多选）"""
+        file_types = [
+            ("图片文件", "*.png *.jpg *.jpeg *.gif *.bmp *.webp"),
+            ("PNG文件", "*.png"),
+            ("JPEG文件", "*.jpg *.jpeg"),
+            ("所有文件", "*.*")
+        ]
+        
+        file_paths = filedialog.askopenfilenames(
+            title="选择图片文件（可多选）",
+            filetypes=file_types
+        )
+        
+        for file_path in file_paths:
+            try:
+                # 读取并验证图片
+                with open(file_path, 'rb') as f:
+                    image_data = f.read()
+                
+                img = Image.open(io.BytesIO(image_data))
+                self.selected_images.append({
+                    'data': image_data,
+                    'source': f'文件: {Path(file_path).name}',
+                    'size': img.size,
+                    'image': img
+                })
+                
+            except Exception as e:
+                messagebox.showerror("错误", f"无法读取图片文件 {Path(file_path).name}: {str(e)}")
+                
+        self.update_image_preview()
+                
+    def paste_from_clipboard(self):
+        """从剪贴板粘贴图片（此方法现在仅为按钮点击服务，并调用paste_handler）"""
+        self.paste_handler() # 调用智能粘贴处理方法
+        
     def clear_all_images(self):
         """清除所有选择的图片"""
         self.selected_images = []
