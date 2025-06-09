@@ -52,7 +52,7 @@ class FeedbackDialog:
         def run_dialog():
             self.root = tk.Tk()
             self.root.title("🎯 工作完成汇报与反馈收集")
-            self.root.geometry("700x800")
+            self.root.geometry("700x1100") # 增大窗口高度
             self.root.resizable(True, True)
             self.root.configure(bg="#f5f5f5")
             
@@ -85,8 +85,8 @@ class FeedbackDialog:
             # self.root.bind('<Return>', lambda event=None: self.submit_feedback()) # Enter键绑定提交
             self.root.bind('<Control-Return>', lambda event=None: self.submit_feedback()) # Ctrl+Enter键绑定提交
             self.root.bind('<Escape>', lambda event=None: self.cancel())   # Esc键绑定取消
-            self.root.bind('<Control-v>', self.paste_handler)  # Ctrl+v 绑定智能粘贴
-            self.root.bind('<Control-V>', self.paste_handler)  # Ctrl+V 绑定智能粘贴
+
+            # 注意：Ctrl+V将直接绑定到text_widget以确保单次粘贴
 
             # 创建界面
             self.create_widgets()
@@ -136,7 +136,7 @@ class FeedbackDialog:
         
         report_text = tk.Text(
             report_frame, 
-            height=5, 
+            height=8, # 调整高度
             wrap=tk.WORD, 
             bg="#ecf0f1", 
             fg="#2c3e50",
@@ -167,7 +167,7 @@ class FeedbackDialog:
         # 文本输入框
         self.text_widget = scrolledtext.ScrolledText(
             feedback_frame, 
-            height=6, 
+            height=10, # 调整高度，为底部按钮腾出空间
             wrap=tk.WORD,
             font=("Microsoft YaHei", 10),
             bg="#ffffff",
@@ -179,9 +179,10 @@ class FeedbackDialog:
         )
         self.text_widget.pack(fill=tk.BOTH, expand=True, padx=15, pady=15)
         
-        # 保持Text控件的默认粘贴行为，用于文本粘贴
         self.text_widget.insert(tk.END, "请在此输入您的反馈、建议或问题...")
         self.text_widget.bind("<FocusIn>", self.clear_placeholder)
+        self.text_widget.bind('<Control-v>', self.paste_handler) # 直接绑定到文本框
+        self.text_widget.bind('<Control-V>', self.paste_handler) # 直接绑定到文本框
         
         # 3. 图片选择区域
         image_frame = tk.LabelFrame(
