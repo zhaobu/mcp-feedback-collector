@@ -530,22 +530,21 @@ class FeedbackDialog:
 
 
 @mcp.tool()
-def collect_feedback(work_summary: str = "", timeout_seconds: int = DIALOG_TIMEOUT) -> list:
+def collect_feedback(work_summary: str = "") -> list:
     """
     收集用户反馈的交互式工具。AI可以汇报完成的工作，用户可以提供文字和/或图片反馈。
     
     Args:
         work_summary: AI完成的工作内容汇报
-        timeout_seconds: 对话框超时时间（秒），默认300秒（5分钟）
         
     Returns:
         包含用户反馈内容的列表，可能包含文本和图片
     """
-    dialog = FeedbackDialog(work_summary, timeout_seconds)
+    dialog = FeedbackDialog(work_summary)
     result = dialog.show_dialog()
     
     if result is None:
-        raise Exception(f"操作超时（{timeout_seconds}秒），请重试")
+        raise Exception(f"操作超时（{DIALOG_TIMEOUT}秒），请重试")
         
     if not result['success']:
         raise Exception(result.get('message', '用户取消了反馈提交'))
