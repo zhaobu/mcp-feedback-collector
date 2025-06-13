@@ -46,13 +46,18 @@ class FeedbackDialog:
         self.selected_images = []  # 改为支持多张图片
         self.image_preview_frame = None
         self.text_widget = None
+        # 倒计时相关属性
+        self.remaining_seconds = timeout_seconds
+        self.countdown_label = None
+        self.countdown_timer = None
+        self.auto_timeout_message = "由于我现在有些忙,不能立即回复你,继续调用mcp-feedback-collector进行反馈,直到我主动回复你其他内容"
         
     def show_dialog(self):
         """在新线程中显示反馈收集对话框"""
         def run_dialog():
             self.root = tk.Tk()
             self.root.title("🎯 工作完成汇报与反馈收集")
-            self.root.geometry("700x1100") # 增大窗口高度
+            self.root.geometry("700x1150") # 增大窗口高度以容纳倒计时
             self.root.resizable(True, True)
             self.root.configure(bg="#f5f5f5")
             
@@ -91,6 +96,9 @@ class FeedbackDialog:
             # 创建界面
             self.create_widgets()
             
+            # 启动倒计时
+            self.start_countdown()
+            
             # 运行主循环
             self.root.mainloop()
             
@@ -99,12 +107,62 @@ class FeedbackDialog:
         dialog_thread.daemon = True
         dialog_thread.start()
         
-        # 等待结果
+        # 等待结果，给内部倒计时额外的缓冲时间
         try:
-            result = self.result_queue.get(timeout=self.timeout_seconds)
+            # 外部超时时间比内部倒计时多5秒，确保内部自动提交能够执行
+            external_timeout = self.timeout_seconds + 5
+            result = self.result_queue.get(timeout=external_timeout)
             return result
         except queue.Empty:
             return None
+    
+    def start_countdown(self):
+        """启动倒计时"""
+        self.update_countdown()
+    
+    def update_countdown(self):
+        """更新倒计时显示"""
+        if self.remaining_seconds <= 0:
+            # 超时，自动提交
+            self.auto_submit_on_timeout()
+            return
+        
+        # 更新倒计时显示
+        minutes = self.remaining_seconds // 60
+        seconds = self.remaining_seconds % 60
+        
+        if self.remaining_seconds <= 60:
+            # 最后1分钟，显示为红色
+            countdown_text = f"⏰ 剩余时间：{seconds}秒"
+            countdown_color = "#e74c3c"
+        else:
+            countdown_text = f"⏰ 剩余时间：{minutes}分{seconds:02d}秒"
+            countdown_color = "#2c3e50"
+        
+        if self.countdown_label:
+            self.countdown_label.config(text=countdown_text, fg=countdown_color)
+        
+        # 减少1秒
+        self.remaining_seconds -= 1
+        
+        # 安排下次更新
+        self.countdown_timer = self.root.after(1000, self.update_countdown)
+    
+    def auto_submit_on_timeout(self):
+        """超时自动提交反馈"""
+        # 清除占位符文本
+        if self.text_widget.get(1.0, tk.END).strip() == "请在此输入您的反馈、建议或问题...":
+            self.text_widget.delete(1.0, tk.END)
+        
+        # 插入自动超时消息
+        self.text_widget.insert(1.0, self.auto_timeout_message)
+        
+        # 更新倒计时显示为超时状态
+        if self.countdown_label:
+            self.countdown_label.config(text="⏰ 已超时，自动提交反馈", fg="#e74c3c")
+        
+        # 自动提交反馈
+        self.submit_feedback()
             
     def create_widgets(self):
         """创建美化的界面组件"""
@@ -120,7 +178,17 @@ class FeedbackDialog:
             bg="#f5f5f5",
             fg="#2c3e50"
         )
-        title_label.pack(pady=(0, 20))
+        title_label.pack(pady=(0, 10))
+        
+        # 倒计时显示
+        self.countdown_label = tk.Label(
+            main_frame,
+            text=f"⏰ 剩余时间：{self.timeout_seconds//60}分{self.timeout_seconds%60:02d}秒",
+            font=("Microsoft YaHei", 12, "bold"),
+            bg="#f5f5f5",
+            fg="#2c3e50"
+        )
+        self.countdown_label.pack(pady=(0, 20))
         
         # 1. 工作汇报区域
         report_frame = tk.LabelFrame(
@@ -300,7 +368,7 @@ class FeedbackDialog:
         # 提示信息
         info_label = tk.Label(
             main_frame,
-            text="💡 提示：文本粘贴请在文本框中使用 Ctrl+V，图片粘贴请使用上方按钮（支持多张图片）",
+            text="💡 提示：文本粘贴请在文本框中使用 Ctrl+V，图片粘贴请使用上方按钮（支持多张图片）\n⏰ 超时后将自动提交固定反馈内容",
             font=("Microsoft YaHei", 9),
             fg="#7f8c8d",
             bg="#f5f5f5"
@@ -378,39 +446,6 @@ class FeedbackDialog:
             pass
         return None # 让Tkinter处理其他未被处理的粘贴事件
 
-    def select_image_file(self):
-        """选择图片文件（支持多选）"""
-        file_types = [
-            ("图片文件", "*.png *.jpg *.jpeg *.gif *.bmp *.webp"),
-            ("PNG文件", "*.png"),
-            ("JPEG文件", "*.jpg *.jpeg"),
-            ("所有文件", "*.*")
-        ]
-        
-        file_paths = filedialog.askopenfilenames(
-            title="选择图片文件（可多选）",
-            filetypes=file_types
-        )
-        
-        for file_path in file_paths:
-            try:
-                # 读取并验证图片
-                with open(file_path, 'rb') as f:
-                    image_data = f.read()
-                
-                img = Image.open(io.BytesIO(image_data))
-                self.selected_images.append({
-                    'data': image_data,
-                    'source': f'文件: {Path(file_path).name}',
-                    'size': img.size,
-                    'image': img
-                })
-                
-            except Exception as e:
-                messagebox.showerror("错误", f"无法读取图片文件 {Path(file_path).name}: {str(e)}")
-                
-        self.update_image_preview()
-                
     def paste_from_clipboard(self):
         """从剪贴板粘贴图片（此方法现在仅为按钮点击服务，并调用paste_handler）"""
         self.paste_handler() # 调用智能粘贴处理方法
@@ -492,6 +527,10 @@ class FeedbackDialog:
             
     def submit_feedback(self):
         """提交反馈"""
+        # 停止倒计时
+        if self.countdown_timer:
+            self.root.after_cancel(self.countdown_timer)
+            
         # 获取文本内容
         text_content = self.text_widget.get(1.0, tk.END).strip()
         if text_content == "请在此输入您的反馈、建议或问题...":
@@ -503,6 +542,8 @@ class FeedbackDialog:
         
         if not has_text and not has_images:
             messagebox.showwarning("警告", "请至少提供文字反馈或图片反馈")
+            # 重新启动倒计时
+            self.start_countdown()
             return
             
         # 准备结果数据
@@ -522,6 +563,10 @@ class FeedbackDialog:
         
     def cancel(self):
         """取消操作"""
+        # 停止倒计时
+        if self.countdown_timer:
+            self.root.after_cancel(self.countdown_timer)
+            
         self.result_queue.put({
             'success': False,
             'message': '用户取消了反馈提交'
@@ -544,7 +589,15 @@ def collect_feedback(work_summary: str = "") -> list:
     result = dialog.show_dialog()
     
     if result is None:
-        raise Exception(f"操作超时（{DIALOG_TIMEOUT}秒），请重试")
+        # 超时时自动返回固定的反馈内容，而不是抛出异常
+        from mcp.types import TextContent
+        auto_timeout_message = "由于我现在有些忙,不能立即回复你,继续调用mcp-feedback-collector进行反馈,直到我主动回复你其他内容"
+        feedback_items = []
+        feedback_items.append(TextContent(
+            type="text", 
+            text=f"用户文字反馈：{auto_timeout_message}\n提交时间：{datetime.now().isoformat()}\n状态：自动超时反馈"
+        ))
+        return feedback_items
         
     if not result['success']:
         raise Exception(result.get('message', '用户取消了反馈提交'))
