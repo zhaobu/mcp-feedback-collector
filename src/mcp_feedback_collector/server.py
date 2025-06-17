@@ -590,14 +590,13 @@ def collect_feedback(work_summary: str = "") -> list:
     
     if result is None:
         # 超时时自动返回固定的反馈内容，而不是抛出异常
-        from mcp.types import TextContent
         auto_timeout_message = "由于我现在有些忙,不能立即回复你,继续调用mcp-feedback-collector进行反馈,直到我主动回复你其他内容"
-        feedback_items = []
-        feedback_items.append(TextContent(
-            type="text", 
-            text=f"用户文字反馈：{auto_timeout_message}\n提交时间：{datetime.now().isoformat()}\n状态：自动超时反馈"
-        ))
-        return feedback_items
+        # 直接返回一个包含文本内容的字典列表，而不是TextContent对象
+        # 确保返回的内容是可JSON序列化的
+        return [{
+            "type": "text",
+            "text": f"用户文字反馈：{auto_timeout_message}\n提交时间：{datetime.now().isoformat()}"
+        }]
         
     if not result['success']:
         raise Exception(result.get('message', '用户取消了反馈提交'))
@@ -607,11 +606,10 @@ def collect_feedback(work_summary: str = "") -> list:
     
     # 添加文字反馈
     if result['has_text']:
-        from mcp.types import TextContent
-        feedback_items.append(TextContent(
-            type="text", 
-            text=f"用户文字反馈：{result['text_feedback']}\n提交时间：{result['timestamp']}"
-        ))
+        feedback_items.append({
+            "type": "text",
+            "text": f"用户文字反馈：{result['text_feedback']}\n提交时间：{result['timestamp']}"
+        })
         
     # 添加图片反馈
     if result['has_images']:
